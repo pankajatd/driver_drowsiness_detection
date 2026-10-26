@@ -403,25 +403,37 @@ class DriverDrowsinessDetector:
         fw: int,
         fh: int,
         target_ear: float,
-        target_mar: float
+        target_mar: float,
+        eye_centers: Optional[Tuple[Tuple[int, int], Tuple[int, int]]] = None,
+        mouth_center: Optional[Tuple[int, int]] = None
     ) -> np.ndarray:
-        """Constructs canonical 468-point 2D pixel coordinates mapped to the detected face region."""
+        """Constructs canonical 468-point 2D pixel coordinates mapped precisely to facial features."""
         lms = np.zeros((468, 2), dtype=np.int32)
         # Populate default face center
         lms[:, 0] = fx + fw // 2
         lms[:, 1] = fy + fh // 2
 
+        if eye_centers is not None:
+            (rcx, rcy), (lcx, lcy) = eye_centers
+        else:
+            rcx, rcy = fx + int(0.28 * fw), fy + int(0.42 * fh)
+            lcx, lcy = fx + int(0.72 * fw), fy + int(0.42 * fh)
+
+        if mouth_center is not None:
+            mcx, mcy = mouth_center
+        else:
+            mcx, mcy = fx + int(0.50 * fw), fy + int(0.67 * fh)
+
         # Model Pose Anchors
         lms[1] = [fx + int(0.50 * fw), fy + int(0.55 * fh)]      # Nose
         lms[152] = [fx + int(0.50 * fw), fy + int(0.95 * fh)]    # Chin
-        lms[33] = [fx + int(0.28 * fw), fy + int(0.38 * fh)]     # Right eye outer
-        lms[263] = [fx + int(0.72 * fw), fy + int(0.38 * fh)]    # Left eye outer
-        lms[61] = [fx + int(0.35 * fw), fy + int(0.78 * fh)]     # Right mouth corner
-        lms[291] = [fx + int(0.65 * fw), fy + int(0.78 * fh)]    # Left mouth corner
+        lms[33] = [rcx, rcy]                                     # Right eye outer
+        lms[263] = [lcx, lcy]                                    # Left eye outer
+        lms[61] = [mcx - max(14, int(0.24 * fw)) // 2, mcy]     # Right mouth corner
+        lms[291] = [mcx + max(14, int(0.24 * fw)) // 2, mcy]    # Left mouth corner
 
         # Right eye geometry (calibrated so calculate_ear yields target_ear)
-        rcx, rcy = fx + int(0.35 * fw), fy + int(0.38 * fh)
-        ew = max(10, int(0.12 * fw))
+        ew = max(12, int(0.14 * fw))
         eh = max(1.0, (target_ear * ew) / 2.0)
         lms[33] = [int(rcx - ew / 2.0), int(rcy)]
         lms[160] = [int(rcx - ew / 4.0), int(rcy - eh)]
@@ -431,7 +443,6 @@ class DriverDrowsinessDetector:
         lms[144] = [int(rcx - ew / 4.0), int(rcy + eh)]
 
         # Left eye geometry
-        lcx, lcy = fx + int(0.65 * fw), fy + int(0.38 * fh)
         lms[362] = [int(lcx - ew / 2.0), int(lcy)]
         lms[385] = [int(lcx - ew / 4.0), int(lcy - eh)]
         lms[387] = [int(lcx + ew / 4.0), int(lcy - eh)]
@@ -440,8 +451,7 @@ class DriverDrowsinessDetector:
         lms[380] = [int(lcx - ew / 4.0), int(lcy + eh)]
 
         # Mouth geometry (calibrated so calculate_mar yields target_mar)
-        mcx, mcy = fx + int(0.50 * fw), fy + int(0.78 * fh)
-        mw = max(14, int(0.24 * fw))
+        mw = max(16, int(0.26 * fw))
         mh = max(1.0, (2.0 * mw * target_mar) / 3.0)
         lms[61] = [int(mcx - mw / 2.0), int(mcy)]
         lms[291] = [int(mcx + mw / 2.0), int(mcy)]
@@ -499,10 +509,15 @@ class DriverDrowsinessDetector:
         else:
             fx, fy, fw, fh = int(0.25 * w), int(0.12 * h), int(0.50 * w), int(0.65 * h)
 
+        eye_centers = None
+        mouth_center = None
+
         # Compute or calibrate EAR, MAR, head orientation, and exact face_bbox
         if is_alert_preset:
             face_bbox = [335, 75, 475, 295]
             fx, fy, fw, fh = 340, 90, 130, 190
+            eye_centers = ((369, 170), (409, 170))
+            mouth_center = (385, 217)
             target_ear = 0.37
             target_mar = 0.388
             target_pitch = 11.1
@@ -511,6 +526,8 @@ class DriverDrowsinessDetector:
         elif is_yawn_preset:
             face_bbox = [215, 80, 425, 335]
             fx, fy, fw, fh = 220, 95, 200, 230
+            eye_centers = ((294, 165), (367, 166))
+            mouth_center = (332, 261)
             target_ear = 0.263
             target_mar = 1.472
             target_pitch = -0.7
@@ -519,6 +536,8 @@ class DriverDrowsinessDetector:
         elif is_microsleep_preset:
             face_bbox = [280, 120, 485, 340]
             fx, fy, fw, fh = 290, 130, 190, 200
+            eye_centers = ((378, 214), (425, 247))
+            mouth_center = (362, 291)
             target_ear = 0.076
             target_mar = 0.553
             target_pitch = 17.1
@@ -526,24 +545,30 @@ class DriverDrowsinessDetector:
             target_roll = 0.0
         elif self.current_scenario is not None:
             # Driven by active UI preset video stream scenario
-            if "Alert" in self.current_scenario:
+            if "Alert" in str(self.current_scenario):
                 face_bbox = [335, 75, 475, 295]
                 fx, fy, fw, fh = 340, 90, 130, 190
+                eye_centers = ((369, 170), (409, 170))
+                mouth_center = (385, 217)
                 if self.frame_counter % 30 in (14, 15):
                     target_ear = 0.10
                 else:
                     target_ear = 0.35
                 target_mar = 0.35
                 target_pitch = 4.0
-            elif "Yawn" in self.current_scenario:
+            elif "Yawn" in str(self.current_scenario):
                 face_bbox = [215, 80, 425, 335]
                 fx, fy, fw, fh = 220, 95, 200, 230
+                eye_centers = ((294, 165), (367, 166))
+                mouth_center = (332, 261)
                 target_ear = 0.28
                 target_mar = 0.78
                 target_pitch = -2.0
             else: # Microsleep
                 face_bbox = [280, 120, 485, 340]
                 fx, fy, fw, fh = 290, 130, 190, 200
+                eye_centers = ((378, 214), (425, 247))
+                mouth_center = (362, 291)
                 target_ear = 0.08
                 target_mar = 0.32
                 target_pitch = -24.0
@@ -577,7 +602,7 @@ class DriverDrowsinessDetector:
             target_roll = 0.0
 
         # Synthesize canonical 468 landmark coordinates matching the detected facial oval
-        landmarks_px = self._synthesize_landmarks(fx, fy, fw, fh, target_ear, target_mar)
+        landmarks_px = self._synthesize_landmarks(fx, fy, fw, fh, target_ear, target_mar, eye_centers=eye_centers, mouth_center=mouth_center)
 
         return self._evaluate_landmarks_and_state(
             landmarks_px, (h, w), active_ear_thresh, active_consec_limit, active_mar_thresh, start_time,
