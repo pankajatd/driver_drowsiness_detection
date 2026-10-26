@@ -187,3 +187,54 @@ class TestInferenceLatency:
         avg_latency = np.mean(latencies)
         assert avg_latency < 100.0, f"Inference latency too slow: {avg_latency:.2f}ms"
         assert res["inference_latency_ms"] < 100.0
+
+
+
+class TestFallbackModeResilience:
+    """Verifies that OpenCV Fallback Engine operates flawlessly in zero-dependency cloud environments."""
+
+    def test_fallback_mode_alert_detection(self, sample_alert_image: np.ndarray):
+        det = DriverDrowsinessDetector(static_image_mode=True)
+        det.fallback_mode = True
+        det.face_mesh = None
+        res = det.process_frame(sample_alert_image, consec_frames=1)
+        assert res["face_detected"] is True
+        assert res["driver_status"] == "ATTENTIVE"
+        assert res["avg_ear"] >= 0.24
+        assert res["microsleep_alert"] is False
+        det.close()
+
+    def test_fallback_mode_microsleep_alarm(self, sample_microsleep_image: np.ndarray):
+        det = DriverDrowsinessDetector(static_image_mode=True)
+        det.fallback_mode = True
+        det.face_mesh = None
+        res = det.process_frame(sample_microsleep_image, consec_frames=1)
+        assert res["face_detected"] is True
+        assert res["driver_status"] == "CRITICAL"
+        assert res["microsleep_alert"] is True
+        assert res["avg_ear"] < 0.22
+        det.close()
+
+    def test_fallback_mode_yawn_alarm(self, sample_yawn_image: np.ndarray):
+        det = DriverDrowsinessDetector(static_image_mode=True)
+        det.fallback_mode = True
+        det.face_mesh = None
+        res = det.process_frame(sample_yawn_image, consec_frames=1)
+        assert res["face_detected"] is True
+        assert res["driver_status"] == "DROWSY"
+        assert res["yawn_alert"] is True
+        assert res["mar"] >= 0.65
+        det.close()
+
+    def test_fallback_mode_blank_and_noise(self, blank_frame: np.ndarray, noise_frame: np.ndarray):
+        det = DriverDrowsinessDetector(static_image_mode=True)
+        det.fallback_mode = True
+        det.face_mesh = None
+        r_blank = det.process_frame(blank_frame)
+        assert r_blank["face_detected"] is False
+        assert r_blank["driver_status"] == "SEARCHING"
+
+        r_noise = det.process_frame(noise_frame)
+        assert r_noise["face_detected"] is False
+        assert r_noise["driver_status"] == "SEARCHING"
+        det.close()

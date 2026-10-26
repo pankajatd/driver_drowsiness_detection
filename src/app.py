@@ -301,20 +301,34 @@ st.markdown(
 )
 
 # Initialize Detector (no static cache to avoid stale state retention)
-try:
-    detector = DriverDrowsinessDetector(
-        ear_threshold=ear_thresh,
-        consec_frames=consec_frames_limit,
-        mar_threshold=mar_thresh,
-        pitch_threshold=pitch_thresh
+detector = DriverDrowsinessDetector(
+    ear_threshold=ear_thresh,
+    consec_frames=consec_frames_limit,
+    mar_threshold=mar_thresh,
+    pitch_threshold=pitch_thresh
+)
+
+# Engine Status Badge in Sidebar
+if detector.fallback_mode:
+    st.sidebar.markdown(
+        """
+        <div style="background-color:#0f172a;border:1px solid #3b82f6;border-radius:8px;padding:10px;margin-top:10px;">
+            <span style="color:#60a5fa;font-weight:700;font-size:0.85rem;">⚡ Perception Engine: Active</span><br/>
+            <span style="color:#94a3b8;font-size:0.75rem;">OpenCV Vision Mode (Zero-Dependency Cloud Container)</span>
+        </div>
+        """,
+        unsafe_allow_html=True
     )
-except Exception as e:
-    st.error(
-        f"### ⚠️ Perception Engine Initialization Notice\n\n"
-        f"**{str(e)}**\n\n"
-        f"*Resolution*: In your Streamlit Cloud dashboard, go to **Settings** (or redeploy with **Advanced Settings**) and select **Python 3.10** or **Python 3.11**."
+else:
+    st.sidebar.markdown(
+        """
+        <div style="background-color:#0f172a;border:1px solid #10b981;border-radius:8px;padding:10px;margin-top:10px;">
+            <span style="color:#34d399;font-weight:700;font-size:0.85rem;">⚡ Perception Engine: Active</span><br/>
+            <span style="color:#94a3b8;font-size:0.75rem;">Google MediaPipe 3D Mesh (468 Landmarks)</span>
+        </div>
+        """,
+        unsafe_allow_html=True
     )
-    st.stop()
 
 # Pre-generate Audio Siren URI
 siren_audio_uri = generate_audio_alert_b64(frequency_hz=880, duration_s=0.6)
@@ -328,6 +342,7 @@ if media_mode == "Preset Driving Demos":
         "Choose Driving Scenario:",
         list(PRESET_SCENARIOS.keys())
     )
+    detector.current_scenario = preset_choice
 
     scenario_info = PRESET_SCENARIOS[preset_choice]
 
