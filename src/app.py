@@ -301,12 +301,20 @@ st.markdown(
 )
 
 # Initialize Detector (no static cache to avoid stale state retention)
-detector = DriverDrowsinessDetector(
-    ear_threshold=ear_thresh,
-    consec_frames=consec_frames_limit,
-    mar_threshold=mar_thresh,
-    pitch_threshold=pitch_thresh
-)
+try:
+    detector = DriverDrowsinessDetector(
+        ear_threshold=ear_thresh,
+        consec_frames=consec_frames_limit,
+        mar_threshold=mar_thresh,
+        pitch_threshold=pitch_thresh
+    )
+except Exception as e:
+    st.error(
+        f"### ⚠️ Perception Engine Initialization Notice\n\n"
+        f"**{str(e)}**\n\n"
+        f"*Resolution*: In your Streamlit Cloud dashboard, go to **Settings** (or redeploy with **Advanced Settings**) and select **Python 3.10** or **Python 3.11**."
+    )
+    st.stop()
 
 # Pre-generate Audio Siren URI
 siren_audio_uri = generate_audio_alert_b64(frequency_hz=880, duration_s=0.6)

@@ -7,18 +7,24 @@ System Codename: DrowsyGuard DMS & Automotive Telemetry Engine
 import time
 import math
 from typing import Dict, Any, Tuple, Optional, List
+import sys
 import numpy as np
 import cv2
-import mediapipe as mp
 
-# Resilient MediaPipe FaceMesh import across versions (supports both python.solutions and legacy mp.solutions)
+# Resilient MediaPipe FaceMesh import across versions
+mp_face_mesh = None
 try:
     import mediapipe.python.solutions.face_mesh as mp_face_mesh
-except (ImportError, AttributeError):
+except Exception:
     try:
         import mediapipe.solutions.face_mesh as mp_face_mesh
-    except (ImportError, AttributeError):
-        mp_face_mesh = mp.solutions.face_mesh
+    except Exception:
+        try:
+            import mediapipe as mp
+            if hasattr(mp, "solutions") and hasattr(mp.solutions, "face_mesh"):
+                mp_face_mesh = mp.solutions.face_mesh
+        except Exception:
+            mp_face_mesh = None
 
 
 class DriverDrowsinessDetector:
@@ -83,6 +89,12 @@ class DriverDrowsinessDetector:
         self.static_image_mode = static_image_mode
 
         # Initialize MediaPipe FaceMesh
+        if mp_face_mesh is None:
+            py_ver = f"{sys.version_info.major}.{sys.version_info.minor}"
+            raise RuntimeError(
+                f"Google MediaPipe FaceMesh is not supported on Python {py_ver}. "
+                f"Please switch your Streamlit Cloud Python version to Python 3.10 or 3.11 in Advanced Settings."
+            )
         self.mp_face_mesh = mp_face_mesh
         self.face_mesh = self.mp_face_mesh.FaceMesh(
             max_num_faces=1,
