@@ -353,13 +353,12 @@ if media_mode == "Preset Driving Demos":
         f"• **Expected Alert Action:** `{scenario_info['expected_alert']}`"
     )
 
-    test_type = st.radio(
-        "Select Demo Format:",
-        ["🎥 Stream Cabin Video Clip", "📸 Inspect Single HD Cabin Photo"],
-        horizontal=True
-    )
+    tab_photo, tab_video = st.tabs([
+        "📷 Single HD Cabin Photo (Instant Analysis)",
+        "🎥 Live Cabin Video Stream Demo"
+    ])
 
-    if test_type == "📸 Inspect Single HD Cabin Photo":
+    with tab_photo:
         img_path = scenario_info["image"]
         if os.path.exists(img_path):
             raw_img = load_and_validate_image(img_path)
@@ -387,11 +386,10 @@ if media_mode == "Preset Driving Demos":
                 st.markdown(f'<audio autoplay><source src="{siren_audio_uri}" type="audio/wav"></audio>', unsafe_allow_html=True)
                 st.error("🚨 EMERGENCY SIREN ACTIVE: The driver's eyes are shut! Wake up!")
 
-    else:
-        # Video stream
+    with tab_video:
         video_path = scenario_info["video"]
         if os.path.exists(video_path):
-            start_video = st.button("▶ Start Driver Monitoring Stream", type="primary")
+            start_video = st.button("▶ Start Driver Monitoring Stream", type="primary", key=f"btn_{preset_choice}")
 
             if start_video:
                 kpi_col1, kpi_col2, kpi_col3, kpi_col4 = st.columns(4)
@@ -455,6 +453,19 @@ if media_mode == "Preset Driving Demos":
                     mime="text/csv",
                     type="primary"
                 )
+            else:
+                # Show preview frame of video
+                cap = cv2.VideoCapture(video_path)
+                ret, preview_frame = cap.read()
+                cap.release()
+                if ret:
+                    preview_rgb = cv2.cvtColor(preview_frame, cv2.COLOR_BGR2RGB)
+                    st.image(
+                        preview_rgb,
+                        caption="Preview of Selected Scenario Video (Click button above to stream live frames)",
+                        channels="RGB",
+                        use_container_width=True
+                    )
 
 
 # =============================================================================
