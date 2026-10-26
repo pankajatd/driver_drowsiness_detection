@@ -11,6 +11,15 @@ import numpy as np
 import cv2
 import mediapipe as mp
 
+# Resilient MediaPipe FaceMesh import across versions (supports both python.solutions and legacy mp.solutions)
+try:
+    import mediapipe.python.solutions.face_mesh as mp_face_mesh
+except (ImportError, AttributeError):
+    try:
+        import mediapipe.solutions.face_mesh as mp_face_mesh
+    except (ImportError, AttributeError):
+        mp_face_mesh = mp.solutions.face_mesh
+
 
 class DriverDrowsinessDetector:
     """
@@ -74,7 +83,7 @@ class DriverDrowsinessDetector:
         self.static_image_mode = static_image_mode
 
         # Initialize MediaPipe FaceMesh
-        self.mp_face_mesh = mp.solutions.face_mesh
+        self.mp_face_mesh = mp_face_mesh
         self.face_mesh = self.mp_face_mesh.FaceMesh(
             max_num_faces=1,
             refine_landmarks=True,
