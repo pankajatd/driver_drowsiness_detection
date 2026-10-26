@@ -1,0 +1,39 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments
+venv/
+.venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+
+# Testing & Coverage
+.pytest_cache/
+.coverage
+htmlcov/
+*.log
+
+# Operating System & IDE Artifacts
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Project Temporary & Scratch Data
+tmp/
+temp/
+*.tmp
+scripts/test_*.py
+scripts/find_*.py
+scripts/search_*.py
+scripts/save_*.py
+scripts/fetch_*.py
+scripts/security_audit_scanner.py
+scripts/verify_*.py
+scripts/deploy_in_car_presets.py

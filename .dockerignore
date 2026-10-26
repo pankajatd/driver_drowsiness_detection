@@ -1,0 +1,31 @@
+# Git & Version Control
+.git/
+.gitignore
+
+# Python Cache & Virtual Environments
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+.venv/
+
+# Testing & Coverage
+.pytest_cache/
+.coverage
+htmlcov/
+tests/test_results/
+
+# Temporary / Scratch Scripts
+scripts/
+tmp/
+temp/
+*.tmp
+
+# Operating System & IDE
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
