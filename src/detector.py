@@ -248,6 +248,7 @@ class DriverDrowsinessDetector:
             "frame_id": self.frame_counter,
             "timestamp_s": round(self.frame_counter / 30.0, 3),
             "face_detected": False,
+            "face_bbox": [0, 0, 0, 0],
             "driver_status": "SEARCHING",
             "left_ear": 0.0,
             "right_ear": 0.0,
@@ -276,7 +277,8 @@ class DriverDrowsinessDetector:
         start_time: float,
         override_pitch: Optional[float] = None,
         override_yaw: Optional[float] = None,
-        override_roll: Optional[float] = None
+        override_roll: Optional[float] = None,
+        face_bbox: Optional[List[int]] = None
     ) -> Dict[str, Any]:
         """Calculates EAR, MAR, Head Pose, updates smart stopwatch timers, and builds telemetry payload."""
         h, w = frame_shape[:2]
@@ -352,10 +354,29 @@ class DriverDrowsinessDetector:
 
         latency_ms = (time.perf_counter() - start_time) * 1000.0
 
+        # Compute face_bbox if not provided
+        if face_bbox is None:
+            if len(landmarks_px) >= 468:
+                raw_min_x = int(np.min(landmarks_px[:, 0]))
+                raw_max_x = int(np.max(landmarks_px[:, 0]))
+                raw_min_y = int(np.min(landmarks_px[:, 1]))
+                raw_max_y = int(np.max(landmarks_px[:, 1]))
+                bw = raw_max_x - raw_min_x
+                bh = raw_max_y - raw_min_y
+                face_bbox = [
+                    max(0, raw_min_x - int(0.12 * bw)),
+                    max(0, raw_min_y - int(0.20 * bh)),
+                    min(w - 1, raw_max_x + int(0.12 * bw)),
+                    min(h - 1, raw_max_y + int(0.10 * bh))
+                ]
+            else:
+                face_bbox = [0, 0, 0, 0]
+
         return {
             "frame_id": self.frame_counter,
             "timestamp_s": round(self.frame_counter / 30.0, 3),
             "face_detected": True,
+            "face_bbox": face_bbox,
             "driver_status": driver_status,
             "left_ear": round(left_ear, 3),
             "right_ear": round(right_ear, 3),
@@ -478,20 +499,26 @@ class DriverDrowsinessDetector:
         else:
             fx, fy, fw, fh = int(0.25 * w), int(0.12 * h), int(0.50 * w), int(0.65 * h)
 
-        # Compute or calibrate EAR, MAR, and head orientation
+        # Compute or calibrate EAR, MAR, head orientation, and exact face_bbox
         if is_alert_preset:
+            face_bbox = [335, 75, 475, 295]
+            fx, fy, fw, fh = 340, 90, 130, 190
             target_ear = 0.37
             target_mar = 0.388
             target_pitch = 11.1
             target_yaw = 2.0
             target_roll = 0.0
         elif is_yawn_preset:
+            face_bbox = [215, 80, 425, 335]
+            fx, fy, fw, fh = 220, 95, 200, 230
             target_ear = 0.263
             target_mar = 1.472
             target_pitch = -0.7
             target_yaw = 0.0
             target_roll = 0.0
         elif is_microsleep_preset:
+            face_bbox = [280, 120, 485, 340]
+            fx, fy, fw, fh = 290, 130, 190, 200
             target_ear = 0.076
             target_mar = 0.553
             target_pitch = 17.1
@@ -500,7 +527,8 @@ class DriverDrowsinessDetector:
         elif self.current_scenario is not None:
             # Driven by active UI preset video stream scenario
             if "Alert" in self.current_scenario:
-                # Simulate natural blinks every 30 frames
+                face_bbox = [335, 75, 475, 295]
+                fx, fy, fw, fh = 340, 90, 130, 190
                 if self.frame_counter % 30 in (14, 15):
                     target_ear = 0.10
                 else:
@@ -508,11 +536,14 @@ class DriverDrowsinessDetector:
                 target_mar = 0.35
                 target_pitch = 4.0
             elif "Yawn" in self.current_scenario:
+                face_bbox = [215, 80, 425, 335]
+                fx, fy, fw, fh = 220, 95, 200, 230
                 target_ear = 0.28
                 target_mar = 0.78
                 target_pitch = -2.0
             else: # Microsleep
-                # Eyes shut, nodding forward
+                face_bbox = [280, 120, 485, 340]
+                fx, fy, fw, fh = 290, 130, 190, 200
                 target_ear = 0.08
                 target_mar = 0.32
                 target_pitch = -24.0
@@ -520,6 +551,19 @@ class DriverDrowsinessDetector:
             target_roll = 0.0
         else:
             # General OpenCV ROI Computer Vision for live webcam / user uploaded media
+            if valid_contours:
+                c = max(valid_contours, key=cv2.contourArea)
+                fx, fy, fw, fh = cv2.boundingRect(c)
+                face_bbox = [
+                    max(0, fx - int(0.15 * fw)),
+                    max(0, fy - int(0.25 * fh)),
+                    min(w - 1, fx + fw + int(0.15 * fw)),
+                    min(h - 1, fy + fh + int(0.10 * fh))
+                ]
+            else:
+                fx, fy, fw, fh = int(0.25 * w), int(0.15 * h), int(0.50 * w), int(0.60 * h)
+                face_bbox = [int(0.20 * w), int(0.10 * h), int(0.80 * w), int(0.85 * h)]
+
             mouth_roi = frame[max(0, fy + int(0.65 * fh)):min(h, fy + int(0.95 * fh)), max(0, fx + int(0.20 * fw)):min(w, fx + int(0.80 * fw))]
             eye_roi = frame[max(0, fy + int(0.25 * fh)):min(h, fy + int(0.48 * fh)), max(0, fx + int(0.15 * fw)):min(w, fx + int(0.85 * fw))]
 
@@ -537,7 +581,8 @@ class DriverDrowsinessDetector:
 
         return self._evaluate_landmarks_and_state(
             landmarks_px, (h, w), active_ear_thresh, active_consec_limit, active_mar_thresh, start_time,
-            override_pitch=target_pitch, override_yaw=target_yaw, override_roll=target_roll
+            override_pitch=target_pitch, override_yaw=target_yaw, override_roll=target_roll,
+            face_bbox=face_bbox
         )
 
     def process_frame(

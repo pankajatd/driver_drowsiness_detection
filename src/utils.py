@@ -253,14 +253,41 @@ def draw_drowsiness_overlay(
     # -------------------------------------------------------------------------
     # 1. Draw Landmark Contours & Face Bounding Box
     # -------------------------------------------------------------------------
-    if landmarks is not None and len(landmarks) > 0:
-        # Landmarks expected as pixel coordinates (N, 2)
-        lm_px = landmarks.astype(np.int32)
-        min_x = max(0, int(np.min(lm_px[:, 0])) - 15)
-        max_x = min(w - 1, int(np.max(lm_px[:, 0])) + 15)
-        min_y = max(0, int(np.min(lm_px[:, 1])) - 20)
-        max_y = min(h - 1, int(np.max(lm_px[:, 1])) + 15)
+    has_bbox = False
+    min_x = min_y = max_x = max_y = 0
 
+    if telemetry and "face_bbox" in telemetry and telemetry["face_bbox"] and telemetry["face_bbox"] != [0, 0, 0, 0]:
+        min_x, min_y, max_x, max_y = telemetry["face_bbox"]
+        has_bbox = True
+    elif telemetry and "all_landmarks_px" in telemetry and len(telemetry["all_landmarks_px"]) >= 468:
+        all_lms = telemetry["all_landmarks_px"]
+        raw_min_x = int(np.min(all_lms[:, 0]))
+        raw_max_x = int(np.max(all_lms[:, 0]))
+        raw_min_y = int(np.min(all_lms[:, 1]))
+        raw_max_y = int(np.max(all_lms[:, 1]))
+        bw = raw_max_x - raw_min_x
+        bh = raw_max_y - raw_min_y
+        min_x = max(0, raw_min_x - int(0.12 * bw))
+        max_x = min(w - 1, raw_max_x + int(0.12 * bw))
+        min_y = max(0, raw_min_y - int(0.20 * bh))
+        max_y = min(h - 1, raw_max_y + int(0.10 * bh))
+        has_bbox = True
+    elif landmarks is not None and len(landmarks) > 0:
+        lm_px = landmarks.astype(np.int32)
+        raw_min_x = int(np.min(lm_px[:, 0]))
+        raw_max_x = int(np.max(lm_px[:, 0]))
+        raw_min_y = int(np.min(lm_px[:, 1]))
+        raw_max_y = int(np.max(lm_px[:, 1]))
+        bw = max(10, raw_max_x - raw_min_x)
+        bh = max(10, raw_max_y - raw_min_y)
+        # Proportionately frame full driver head
+        min_x = max(0, raw_min_x - int(0.35 * bw))
+        max_x = min(w - 1, raw_max_x + int(0.35 * bw))
+        min_y = max(0, raw_min_y - int(0.55 * bh))
+        max_y = min(h - 1, raw_max_y + int(0.25 * bh))
+        has_bbox = True
+
+    if has_bbox and (max_x > min_x) and (max_y > min_y):
         # Draw Dynamic Driver Bounding Box
         stroke = max(2, int(w * 0.003))
         cv2.rectangle(canvas, (min_x, min_y), (max_x, max_y), status_color, stroke)
@@ -276,14 +303,15 @@ def draw_drowsiness_overlay(
         cv2.line(canvas, (max_x, max_y), (max_x - corner_len, max_y), status_color, stroke + 2)
         cv2.line(canvas, (max_x, max_y), (max_x, max_y - corner_len), status_color, stroke + 2)
 
-        # Draw Eye and Mouth Contours if mesh enabled
-        if show_mesh and len(lm_px) >= 30:
-            # Draw eye contour points in Electric Cyan
-            for pt in lm_px[:12]:
-                cv2.circle(canvas, (pt[0], pt[1]), 2, COLOR_EYE_CONTOUR, -1, lineType=cv2.LINE_AA)
-            # Draw mouth contour points in Bright Amber
-            for pt in lm_px[12:20]:
-                cv2.circle(canvas, (pt[0], pt[1]), 2, COLOR_MOUTH_CONTOUR, -1, lineType=cv2.LINE_AA)
+    # Draw Eye and Mouth Contours if mesh enabled
+    if show_mesh and landmarks is not None and len(landmarks) >= 20:
+        lm_px = landmarks.astype(np.int32)
+        # Draw eye contour points in Electric Cyan
+        for pt in lm_px[:12]:
+            cv2.circle(canvas, (int(pt[0]), int(pt[1])), 2, COLOR_EYE_CONTOUR, -1, lineType=cv2.LINE_AA)
+        # Draw mouth contour points in Bright Amber
+        for pt in lm_px[12:20]:
+            cv2.circle(canvas, (int(pt[0]), int(pt[1])), 2, COLOR_MOUTH_CONTOUR, -1, lineType=cv2.LINE_AA)
 
     # -------------------------------------------------------------------------
     # 2. Emergency Flashing Top Siren Banner on Critical Microsleep
